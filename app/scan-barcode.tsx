@@ -1,58 +1,72 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { BarCodeScanner } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useComposerStore } from "../lib/composer";
 import { router } from "expo-router";
 
 export default function ScanBarcode() {
-  const [hasPerm, setHasPerm] = React.useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = React.useState(false);
   const add = useComposerStore((s) => s.add);
 
   React.useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPerm(status === "granted");
-    })();
-  }, []);
+    if (!permission?.granted) requestPermission();
+  }, [permission]);
 
-  if (hasPerm === null)
+  if (!permission)
     return (
       <View style={sc.container}>
-        <Text style={{ color: "white" }}>Requesting camera...</Text>
+        <Text style={sc.text}>Requesting camera…</Text>
       </View>
     );
-  if (hasPerm === false)
+
+  if (!permission.granted)
     return (
       <View style={sc.container}>
-        <Text style={{ color: "white" }}>No camera access.</Text>
+        <Text style={sc.text}>
+          Camera permission is required to scan barcodes.
+        </Text>
+        <Pressable style={sc.cta} onPress={requestPermission}>
+          <Text style={sc.ctaText}>Grant permission</Text>
+        </Pressable>
       </View>
     );
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0B0F14" }}>
-      <BarCodeScanner
+      <CameraView
         style={{ flex: 1 }}
-        onBarCodeScanned={({ data }) => {
+        onBarcodeScanned={({ data }) => {
           if (scanned) return;
           setScanned(true);
           const item = {
-            id: data,
+            id: String(data),
             name: "Cereal Bar",
             serving: "1 bar (40g)",
             cals: 160,
             p: 6,
             c: 24,
             f: 4,
-            barcode: data,
+            barcode: String(data),
           };
           add(item);
           router.back();
         }}
+        barcodeScannerSettings={{
+          barcodeTypes: [
+            "qr",
+            "ean13",
+            "ean8",
+            "upc_a",
+            "upc_e",
+            "code128",
+            "pdf417",
+          ],
+        }}
       />
       {scanned && (
-        <Pressable style={sc.again} onPress={() => setScanned(false)}>
-          <Text style={{ color: "#000", fontWeight: "600" }}>Scan again</Text>
+        <Pressable style={sc.cta} onPress={() => setScanned(false)}>
+          <Text style={sc.ctaText}>Scan again</Text>
         </Pressable>
       )}
     </View>
@@ -64,8 +78,10 @@ const sc = StyleSheet.create({
     backgroundColor: "#0B0F14",
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
   },
-  again: {
+  text: { color: "white", textAlign: "center" },
+  cta: {
     position: "absolute",
     left: 24,
     right: 24,
@@ -75,4 +91,5 @@ const sc = StyleSheet.create({
     padding: 16,
     alignItems: "center",
   },
+  ctaText: { color: "#000", fontWeight: "600" },
 });
