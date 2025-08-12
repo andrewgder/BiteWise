@@ -13,6 +13,8 @@ Recipes / Meal creation
 8/12/25:
 Completed:
 updated homepage layout
+Integrate USDA API for search
 
 In Progress:
-Integrate USDA API for search
+Confirm Barcode searching works 
+
