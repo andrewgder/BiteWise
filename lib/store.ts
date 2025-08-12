@@ -6,7 +6,7 @@ export type MacroTargets = {
   calories: number;
   protein: number;
   carbs: number;
-  fat: number;
+  fats: number;
 };
 export type FoodItem = {
   id: string;
@@ -37,7 +37,7 @@ interface MacroState {
 const STORAGE_KEY = "bitewise-state-v1";
 
 export const useMacroStore = create<MacroState>((set, get) => ({
-  targets: { calories: 2200, protein: 170, carbs: 220, fat: 70 },
+  targets: { calories: 2200, protein: 170, carbs: 220, fats: 70 },
   logs: {
     [dayjs().format("YYYY-MM-DD")]: {
       date: dayjs().format("YYYY-MM-DD"),

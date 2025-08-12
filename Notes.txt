@@ -7,6 +7,12 @@ Ability to add own receipe/food with macros
 copy macros from friend's input
 Research account creation
 Create Profile tab 
+Integrate USADA API for barcodes 
+Recipes / Meal creation
 
 8/12/25:
+Completed:
+updated homepage layout
 
+In Progress:
+Integrate USDA API for search

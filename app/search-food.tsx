@@ -1,118 +1,93 @@
-import React from "react";
+// app/search-food.tsx  (adjust path if you use /search or /search-food)
+import React, { useState } from "react";
 import {
   View,
-  Text,
   TextInput,
   FlatList,
   Pressable,
+  Text,
   StyleSheet,
 } from "react-native";
+import { useFdcSearch } from "../hooks/UseFdcSearch";
+import { displayName, extractMacros, servingText, FdcFood } from "../lib/fdc";
 import { router } from "expo-router";
-import { useComposerStore } from "../lib/composer";
-
-const MOCK = [
-  {
-    id: "1",
-    name: "Greek Yogurt (Plain, 170g)",
-    serving: "170 g",
-    cals: 100,
-    p: 17,
-    c: 6,
-    f: 0,
-    brand: "Fage",
-  },
-  {
-    id: "2",
-    name: "Banana (Medium)",
-    serving: "118 g",
-    cals: 105,
-    p: 1,
-    c: 27,
-    f: 0,
-  },
-  {
-    id: "3",
-    name: "Chicken Breast (Cooked, 100g)",
-    serving: "100 g",
-    cals: 165,
-    p: 31,
-    c: 0,
-    f: 3,
-  },
-  {
-    id: "4",
-    name: "Olive Oil (1 tbsp)",
-    serving: "14 g",
-    cals: 119,
-    p: 0,
-    c: 0,
-    f: 14,
-  },
-];
 
 export default function SearchFood() {
-  const [q, setQ] = React.useState("");
-  const add = useComposerStore((s) => s.add);
-  const data = MOCK.filter((i) =>
-    i.name.toLowerCase().includes(q.toLowerCase())
-  );
+  const [q, setQ] = useState("");
+  const { data, loading, error } = useFdcSearch(q);
+
   return (
-    <View style={sf.container}>
-      <Text style={sf.h1}>Search food</Text>
+    <View style={s.container}>
       <TextInput
-        style={sf.input}
-        placeholder="Search database..."
-        placeholderTextColor="#6B7A88"
+        style={s.input}
+        placeholder="Search foods (e.g., chicken breast)"
+        placeholderTextColor="#94A3B8"
         value={q}
         onChangeText={setQ}
+        autoFocus
       />
+
+      {loading ? <Text style={s.info}>Searching…</Text> : null}
+      {error ? <Text style={s.err}>{error}</Text> : null}
+
       <FlatList
-        style={{ marginTop: 12 }}
         data={data}
-        keyExtractor={(i) => i.id}
-        renderItem={({ item }) => (
-          <Pressable
-            style={sf.card}
-            onPress={() => {
-              add(item);
-              router.back();
-            }}
-          >
-            <Text style={sf.cardTitle}>{item.name}</Text>
-            <Text style={sf.sub}>
-              {item.serving} • {item.cals} kcal • P{item.p} C{item.c} F{item.f}
-            </Text>
-          </Pressable>
-        )}
+        keyExtractor={(item) => String(item.fdcId)}
+        renderItem={({ item }) => <Row item={item} />}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 24 }}
       />
     </View>
   );
 }
-const sf = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0B0F14",
-    paddingHorizontal: 24,
-    paddingTop: 48,
-  },
-  h1: { color: "white", fontSize: 20, fontWeight: "700" },
+
+function Row({ item }: { item: FdcFood }) {
+  const m = extractMacros(item);
+  return (
+    <Pressable
+      onPress={() =>
+        router.push({
+          pathname: "/add-meal",
+          params: { fdcId: String(item.fdcId) },
+        })
+      }
+      style={s.row}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={s.title}>{displayName(item)}</Text>
+        <Text style={s.sub}>
+          {m.calories} kcal · P {m.protein}g · C {m.carbs}g · F {m.fats}g ·{" "}
+          {servingText(item)}
+        </Text>
+      </View>
+      <Text style={s.chev}>›</Text>
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0B0F14", padding: 16 },
   input: {
-    marginTop: 12,
-    backgroundColor: "#0F141B",
+    backgroundColor: "#0E141B",
+    borderColor: "#1F2A37",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: "white",
-    borderColor: "#1E2630",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
+    marginBottom: 12,
   },
-  card: {
-    backgroundColor: "#0F141B",
-    borderColor: "#1E2630",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 8,
+  row: {
+    paddingVertical: 12,
+    borderBottomColor: "#1F2A37",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  cardTitle: { color: "white" },
-  sub: { color: "#9AA8B4", fontSize: 12 },
+  title: { color: "white", fontWeight: "700" },
+  sub: { color: "#9AA8B4", marginTop: 2 },
+  chev: { color: "#64748B", fontSize: 22, paddingHorizontal: 8 },
+  info: { color: "#9AA8B4", marginVertical: 8 },
+  err: { color: "#FCA5A5", marginVertical: 8 },
 });
