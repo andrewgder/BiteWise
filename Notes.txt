@@ -1,0 +1,12 @@
+8/8/25:
+To DO:
+Migrate theme and format from loveable to app 
+research api integration with USDA
+research barcode scanning to get nutrition facts/ food images
+Ability to add own receipe/food with macros
+copy macros from friend's input
+Research account creation
+Create Profile tab 
+
+8/12/25:
+
