@@ -32,6 +32,14 @@ function getFirstParam(p?: string | string[] | null) {
   return p ?? null;
 }
 
+function toNum(txt: string) {
+  const n = Number(String(txt).replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+function kcalFromMacros(p: number, c: number, f: number) {
+  return Math.round(4 * p + 4 * c + 9 * f);
+}
+
 export default function AddMeal() {
   const params = useLocalSearchParams<{ fdcId?: string | string[] }>();
 
@@ -44,32 +52,31 @@ export default function AddMeal() {
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<Mode>("servings");
 
-  // Controls
+  // Controls (fdc-driven)
   const [servings, setServings] = useState(1);
   const [grams, setGrams] = useState<number | "">("");
+
+  // Controls (manual macros when no food)
+  const [mProtein, setMProtein] = useState<string>("0");
+  const [mCarbs, setMCarbs] = useState<string>("0");
+  const [mFats, setMFats] = useState<string>("0");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!fdcId) {
-        console.log("[AddMeal] No valid fdcId param:", params?.fdcId);
+        // No imported food → manual entry mode for macros
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
-        console.log("[AddMeal] Fetching fdcId:", fdcId);
         const f = await fdcGet(fdcId);
         if (cancelled) return;
         setFood(f);
         setTitle(displayName(f)); // prefill title from the selected food
         const gBase = baseGramsFor(f);
         if (gBase) setGrams(gBase);
-        console.log("[AddMeal] Loaded Food:", {
-          fdcId: f.fdcId,
-          desc: f.description,
-          dataType: f.dataType,
-        });
       } catch (e: any) {
         if (!cancelled) {
           console.warn("[AddMeal] fdcGet error:", e);
@@ -86,14 +93,28 @@ export default function AddMeal() {
 
   const base = useMemo(() => (food ? extractMacros(food) : null), [food]);
 
+  // ---- totals: source-aware (fdc vs manual) ----
   const totals = useMemo(() => {
-    if (!food) return { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    if (mode === "grams") {
-      const g = typeof grams === "number" ? grams : Number(grams || 0);
-      return scaleMacros(food, { grams: g || 0 });
+    if (food) {
+      if (mode === "grams") {
+        const g = typeof grams === "number" ? grams : Number(grams || 0);
+        return scaleMacros(food, { grams: g || 0 });
+      }
+      return scaleMacros(food, { servings });
+    } else {
+      // Manual macros path
+      const p = toNum(mProtein);
+      const c = toNum(mCarbs);
+      const f = toNum(mFats);
+      const calories = kcalFromMacros(p, c, f);
+      return {
+        calories,
+        protein: p,
+        carbs: c,
+        fats: f,
+      };
     }
-    return scaleMacros(food, { servings });
-  }, [food, mode, servings, grams]);
+  }, [food, mode, servings, grams, mProtein, mCarbs, mFats]);
 
   const gramsSupported = useMemo(() => {
     const gBase = food ? baseGramsFor(food) : null;
@@ -114,15 +135,19 @@ export default function AddMeal() {
     // Convert to store shape cals/p/c/f (all numbers)
     const totalsStore = toStoreMacros(totals); // { cals, p, c, f }
 
-    // Build an item that has BOTH flattened fields and nested macros
+    // Build item
     const item = {
       id: id + "-item",
-      fdcId,
+      fdcId: food ? fdcId : undefined,
       name: title.trim(),
-      mode,
-      servings: mode === "servings" ? servings : undefined,
+      mode: food ? mode : undefined,
+      servings: food && mode === "servings" ? servings : undefined,
       grams:
-        mode === "grams" ? (typeof grams === "number" ? grams : 0) : undefined,
+        food && mode === "grams"
+          ? typeof grams === "number"
+            ? grams
+            : 0
+          : undefined,
       cals: Number(totalsStore.cals) || 0,
       p: Number(totalsStore.p) || 0,
       c: Number(totalsStore.c) || 0,
@@ -134,8 +159,8 @@ export default function AddMeal() {
       id,
       date,
       title: title.trim() || "Meal",
-      source: "fdc",
-      fdcId,
+      source: food ? "fdc" : "manual",
+      fdcId: food ? fdcId : undefined,
       items: [item],
       totals: { cals: item.cals, p: item.p, c: item.c, f: item.f },
     });
@@ -143,6 +168,8 @@ export default function AddMeal() {
     router.dismissAll?.();
     router.replace("/home"); // or "/" if your home is index.tsx
   }
+
+  const showManualMacros = !food; // true when user is creating a meal without imported food
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={s.safe}>
@@ -154,7 +181,7 @@ export default function AddMeal() {
         <ScrollView contentContainerStyle={s.scroll}>
           <Text style={s.h1}>Add Meal</Text>
 
-          {/* Title (prefilled from selected food) */}
+          {/* Title */}
           <View style={s.card}>
             <Text style={s.label}>Title</Text>
             <TextInput
@@ -166,90 +193,173 @@ export default function AddMeal() {
             />
             {food ? (
               <Text style={s.help}>Selected: {displayName(food)}</Text>
-            ) : null}
+            ) : (
+              <Text style={s.help}>
+                No food imported — enter macros manually.
+              </Text>
+            )}
           </View>
 
-          {/* Mode toggle */}
-          <View style={s.toggleRow}>
-            <Pressable
-              style={[s.toggleBtn, mode === "servings" && s.toggleBtnActive]}
-              onPress={() => setMode("servings")}
-            >
-              <Text
-                style={[s.toggleTxt, mode === "servings" && s.toggleTxtActive]}
-              >
-                Servings
-              </Text>
-            </Pressable>
-            <Pressable
-              disabled={!gramsSupported}
-              style={[
-                s.toggleBtn,
-                mode === "grams" && s.toggleBtnActive,
-                !gramsSupported && s.toggleBtnDisabled,
-              ]}
-              onPress={() => gramsSupported && setMode("grams")}
-            >
-              <Text
-                style={[
-                  s.toggleTxt,
-                  mode === "grams" && s.toggleTxtActive,
-                  !gramsSupported && s.toggleTxtDisabled,
-                ]}
-              >
-                Grams
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Controls */}
-          {mode === "servings" ? (
-            <View style={s.card}>
-              <Text style={s.label}>Servings</Text>
-              <View style={s.stepRow}>
-                <Pressable style={s.step} onPress={() => bumpServings(-0.5)}>
-                  <Text style={s.stepTxt}>−</Text>
-                </Pressable>
-                <TextInput
-                  value={String(servings)}
-                  onChangeText={(t) => setServings(Math.max(0, Number(t) || 0))}
-                  keyboardType="decimal-pad"
+          {/* FDC controls only when food exists */}
+          {food && (
+            <>
+              {/* Mode toggle */}
+              <View style={s.toggleRow}>
+                <Pressable
                   style={[
-                    s.input,
-                    { flex: undefined, width: 100, textAlign: "center" },
+                    s.toggleBtn,
+                    mode === "servings" && s.toggleBtnActive,
                   ]}
-                />
-                <Pressable style={s.step} onPress={() => bumpServings(+0.5)}>
-                  <Text style={s.stepTxt}>＋</Text>
+                  onPress={() => setMode("servings")}
+                >
+                  <Text
+                    style={[
+                      s.toggleTxt,
+                      mode === "servings" && s.toggleTxtActive,
+                    ]}
+                  >
+                    Servings
+                  </Text>
+                </Pressable>
+                <Pressable
+                  disabled={!gramsSupported}
+                  style={[
+                    s.toggleBtn,
+                    mode === "grams" && s.toggleBtnActive,
+                    !gramsSupported && s.toggleBtnDisabled,
+                  ]}
+                  onPress={() => gramsSupported && setMode("grams")}
+                >
+                  <Text
+                    style={[
+                      s.toggleTxt,
+                      mode === "grams" && s.toggleTxtActive,
+                      !gramsSupported && s.toggleTxtDisabled,
+                    ]}
+                  >
+                    Grams
+                  </Text>
                 </Pressable>
               </View>
-              {food?.servingSize ? (
-                <Text style={s.help}>
-                  1 serving = {food.servingSize} {food.servingSizeUnit || ""}
-                </Text>
+
+              {/* Controls */}
+              {mode === "servings" ? (
+                <View style={s.card}>
+                  <Text style={s.label}>Servings</Text>
+                  <View style={s.stepRow}>
+                    <Pressable
+                      style={s.step}
+                      onPress={() => bumpServings(-0.5)}
+                    >
+                      <Text style={s.stepTxt}>−</Text>
+                    </Pressable>
+                    <TextInput
+                      value={String(servings)}
+                      onChangeText={(t) =>
+                        setServings(Math.max(0, Number(t) || 0))
+                      }
+                      keyboardType="decimal-pad"
+                      style={[s.input, { width: 100, textAlign: "center" }]}
+                    />
+                    <Pressable
+                      style={s.step}
+                      onPress={() => bumpServings(+0.5)}
+                    >
+                      <Text style={s.stepTxt}>＋</Text>
+                    </Pressable>
+                  </View>
+                  {food?.servingSize ? (
+                    <Text style={s.help}>
+                      1 serving = {food.servingSize}{" "}
+                      {food.servingSizeUnit || ""}
+                    </Text>
+                  ) : (
+                    <Text style={s.help}>
+                      Servings multiply the base nutrition from the source.
+                    </Text>
+                  )}
+                </View>
               ) : (
-                <Text style={s.help}>
-                  Servings multiply the base nutrition from the source.
-                </Text>
+                <View style={s.card}>
+                  <Text style={s.label}>Weight (g)</Text>
+                  <TextInput
+                    value={grams === "" ? "" : String(grams)}
+                    onChangeText={(t) => {
+                      const n = Number(t);
+                      setGrams(Number.isFinite(n) ? n : "");
+                    }}
+                    keyboardType="numeric"
+                    style={[s.input, { width: 120 }]}
+                  />
+                  {food && (
+                    <Text style={s.help}>
+                      Base for scaling: {baseGramsFor(food)} g
+                    </Text>
+                  )}
+                </View>
               )}
-            </View>
-          ) : (
+            </>
+          )}
+
+          {/* Manual macros entry when no food imported */}
+          {showManualMacros && (
             <View style={s.card}>
-              <Text style={s.label}>Weight (g)</Text>
-              <TextInput
-                value={grams === "" ? "" : String(grams)}
-                onChangeText={(t) => {
-                  const n = Number(t);
-                  setGrams(Number.isFinite(n) ? n : "");
-                }}
-                keyboardType="numeric"
-                style={[s.input, { width: 120 }]}
-              />
-              {food && (
-                <Text style={s.help}>
-                  Base for scaling: {baseGramsFor(food)} g
-                </Text>
-              )}
+              <Text style={s.label}>Manual Macros</Text>
+              <View style={{ gap: 10 }}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.smallLbl}>Protein (g)</Text>
+                    <TextInput
+                      keyboardType="numeric"
+                      inputMode="decimal"
+                      value={mProtein}
+                      onChangeText={setMProtein}
+                      placeholder="0"
+                      placeholderTextColor="#94A3B8"
+                      style={s.input}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.smallLbl}>Carbs (g)</Text>
+                    <TextInput
+                      keyboardType="numeric"
+                      inputMode="decimal"
+                      value={mCarbs}
+                      onChangeText={setMCarbs}
+                      placeholder="0"
+                      placeholderTextColor="#94A3B8"
+                      style={s.input}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.smallLbl}>Fats (g)</Text>
+                    <TextInput
+                      keyboardType="numeric"
+                      inputMode="decimal"
+                      value={mFats}
+                      onChangeText={setMFats}
+                      placeholder="0"
+                      placeholderTextColor="#94A3B8"
+                      style={s.input}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={s.smallLbl}>Calories (kcal)</Text>
+                  <TextInput
+                    editable={false}
+                    value={String(totals.calories || 0)}
+                    style={[
+                      s.input,
+                      { backgroundColor: "#0B1117", opacity: 0.9 },
+                    ]}
+                  />
+                  <Text style={s.help}>
+                    kcal is calculated from macros (4/4/9).
+                  </Text>
+                </View>
+              </View>
             </View>
           )}
 
@@ -331,6 +441,8 @@ const s = StyleSheet.create({
   },
 
   label: { color: "white", fontWeight: "700", marginBottom: 8 },
+  smallLbl: { color: "white", marginBottom: 6, fontSize: 12, opacity: 0.9 },
+
   input: {
     backgroundColor: "#0B1117",
     borderColor: "#1F2A37",
