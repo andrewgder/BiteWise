@@ -8,7 +8,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   fdcGet,
@@ -20,9 +24,6 @@ import {
   toStoreMacros,
 } from "../lib/fdc";
 import { useMacroStore, todayKey } from "../lib/store";
-
-// If your store has addMeal/todayKey, wire them here:
-// import { useMacroStore, todayKey } from "../lib/store";
 
 type Mode = "servings" | "grams";
 
@@ -102,6 +103,7 @@ export default function AddMeal() {
   function bumpServings(delta: number) {
     setServings((s) => Math.max(0, +(s + delta).toFixed(2)));
   }
+
   // if you have an addMeal action
   const addMeal = useMacroStore((s) => s.addMeal);
 
@@ -121,18 +123,13 @@ export default function AddMeal() {
       servings: mode === "servings" ? servings : undefined,
       grams:
         mode === "grams" ? (typeof grams === "number" ? grams : 0) : undefined,
-
-      // flattened fields (what many sum functions expect)
       cals: Number(totalsStore.cals) || 0,
       p: Number(totalsStore.p) || 0,
       c: Number(totalsStore.c) || 0,
       f: Number(totalsStore.f) || 0,
-
-      // nested (for newer components)
       macros: totalsStore,
     };
 
-    // Meal wrapper also includes totals with the same shape
     addMeal(date, {
       id,
       date,
@@ -140,178 +137,188 @@ export default function AddMeal() {
       source: "fdc",
       fdcId,
       items: [item],
-      totals: {
-        cals: item.cals,
-        p: item.p,
-        c: item.c,
-        f: item.f,
-      },
+      totals: { cals: item.cals, p: item.p, c: item.c, f: item.f },
     });
 
-    // Go home (don’t include route group)
     router.dismissAll?.();
     router.replace("/home"); // or "/" if your home is index.tsx
   }
 
   return (
-    <View style={s.container}>
-      <Text style={s.h1}>Add Meal</Text>
-
-      {/* Title (prefilled from selected food) */}
-      <View style={s.card}>
-        <Text style={s.label}>Title</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Meal name"
-          placeholderTextColor="#94A3B8"
-          style={s.input}
-        />
-        {food ? (
-          <Text style={s.help}>Selected: {displayName(food)}</Text>
-        ) : null}
-      </View>
-
-      {/* Mode toggle */}
-      <View style={s.toggleRow}>
-        <Pressable
-          style={[s.toggleBtn, mode === "servings" && s.toggleBtnActive]}
-          onPress={() => setMode("servings")}
-        >
-          <Text style={[s.toggleTxt, mode === "servings" && s.toggleTxtActive]}>
-            Servings
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={!gramsSupported}
-          style={[
-            s.toggleBtn,
-            mode === "grams" && s.toggleBtnActive,
-            !gramsSupported && s.toggleBtnDisabled,
-          ]}
-          onPress={() => gramsSupported && setMode("grams")}
-        >
-          <Text
-            style={[
-              s.toggleTxt,
-              mode === "grams" && s.toggleTxtActive,
-              !gramsSupported && s.toggleTxtDisabled,
-            ]}
-          >
-            Grams
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Controls */}
-      {mode === "servings" ? (
-        <View style={s.card}>
-          <Text style={s.label}>Servings</Text>
-          <View style={s.stepRow}>
-            <Pressable style={s.step} onPress={() => bumpServings(-0.5)}>
-              <Text style={s.stepTxt}>−</Text>
-            </Pressable>
-            <TextInput
-              value={String(servings)}
-              onChangeText={(t) => setServings(Math.max(0, Number(t) || 0))}
-              keyboardType="decimal-pad"
-              style={[
-                s.input,
-                { flex: undefined, width: 100, textAlign: "center" },
-              ]}
-            />
-            <Pressable style={s.step} onPress={() => bumpServings(+0.5)}>
-              <Text style={s.stepTxt}>＋</Text>
-            </Pressable>
-          </View>
-          {food?.servingSize ? (
-            <Text style={s.help}>
-              1 serving = {food.servingSize} {food.servingSizeUnit || ""}
-            </Text>
-          ) : (
-            <Text style={s.help}>
-              Servings multiply the base nutrition from the source.
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View style={s.card}>
-          <Text style={s.label}>Weight (g)</Text>
-          <TextInput
-            value={grams === "" ? "" : String(grams)}
-            onChangeText={(t) => {
-              const n = Number(t);
-              setGrams(Number.isFinite(n) ? n : "");
-            }}
-            keyboardType="numeric"
-            style={[s.input, { width: 120 }]}
-          />
-          {food && (
-            <Text style={s.help}>Base for scaling: {baseGramsFor(food)} g</Text>
-          )}
-        </View>
-      )}
-
-      {/* Nutrition preview */}
-      <View style={s.card}>
-        <Text style={s.label}>Nutrition</Text>
-        {loading && (
-          <View style={s.loadingRow}>
-            <ActivityIndicator />
-            <Text style={[s.help, { marginLeft: 8 }]}>Loading nutrition…</Text>
-          </View>
-        )}
-
-        {!loading &&
-        food &&
-        totals.calories === 0 &&
-        totals.protein === 0 &&
-        totals.carbs === 0 &&
-        totals.fats === 0 ? (
-          <Text style={s.help}>
-            No nutrient data found for this item. Try another item or adjust
-            serving/grams.
-          </Text>
-        ) : (
-          <View style={s.macrosRow}>
-            <View style={s.macroItem}>
-              <Text style={s.macroVal}>{totals.calories}</Text>
-              <Text style={s.macroLbl}>kcal</Text>
-            </View>
-            <View style={s.macroItem}>
-              <Text style={s.macroVal}>{totals.protein}</Text>
-              <Text style={s.macroLbl}>Protein (g)</Text>
-            </View>
-            <View style={s.macroItem}>
-              <Text style={s.macroVal}>{totals.carbs}</Text>
-              <Text style={s.macroLbl}>Carbs (g)</Text>
-            </View>
-            <View style={s.macroItem}>
-              <Text style={s.macroVal}>{totals.fats}</Text>
-              <Text style={s.macroLbl}>Fats (g)</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Save */}
-      <Pressable
-        style={[s.saveBtn, (!title.trim() || loading) && s.saveBtnDisabled]}
-        onPress={onSave}
-        disabled={loading || !title.trim()}
+    <SafeAreaView edges={["top", "bottom"]} style={s.safe}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
-        {loading ? (
-          <ActivityIndicator color="#06240F" />
-        ) : (
-          <Text style={s.saveTxt}>Save Meal</Text>
-        )}
-      </Pressable>
-    </View>
+        <ScrollView contentContainerStyle={s.scroll}>
+          <Text style={s.h1}>Add Meal</Text>
+
+          {/* Title (prefilled from selected food) */}
+          <View style={s.card}>
+            <Text style={s.label}>Title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Meal name"
+              placeholderTextColor="#94A3B8"
+              style={s.input}
+            />
+            {food ? (
+              <Text style={s.help}>Selected: {displayName(food)}</Text>
+            ) : null}
+          </View>
+
+          {/* Mode toggle */}
+          <View style={s.toggleRow}>
+            <Pressable
+              style={[s.toggleBtn, mode === "servings" && s.toggleBtnActive]}
+              onPress={() => setMode("servings")}
+            >
+              <Text
+                style={[s.toggleTxt, mode === "servings" && s.toggleTxtActive]}
+              >
+                Servings
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={!gramsSupported}
+              style={[
+                s.toggleBtn,
+                mode === "grams" && s.toggleBtnActive,
+                !gramsSupported && s.toggleBtnDisabled,
+              ]}
+              onPress={() => gramsSupported && setMode("grams")}
+            >
+              <Text
+                style={[
+                  s.toggleTxt,
+                  mode === "grams" && s.toggleTxtActive,
+                  !gramsSupported && s.toggleTxtDisabled,
+                ]}
+              >
+                Grams
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Controls */}
+          {mode === "servings" ? (
+            <View style={s.card}>
+              <Text style={s.label}>Servings</Text>
+              <View style={s.stepRow}>
+                <Pressable style={s.step} onPress={() => bumpServings(-0.5)}>
+                  <Text style={s.stepTxt}>−</Text>
+                </Pressable>
+                <TextInput
+                  value={String(servings)}
+                  onChangeText={(t) => setServings(Math.max(0, Number(t) || 0))}
+                  keyboardType="decimal-pad"
+                  style={[
+                    s.input,
+                    { flex: undefined, width: 100, textAlign: "center" },
+                  ]}
+                />
+                <Pressable style={s.step} onPress={() => bumpServings(+0.5)}>
+                  <Text style={s.stepTxt}>＋</Text>
+                </Pressable>
+              </View>
+              {food?.servingSize ? (
+                <Text style={s.help}>
+                  1 serving = {food.servingSize} {food.servingSizeUnit || ""}
+                </Text>
+              ) : (
+                <Text style={s.help}>
+                  Servings multiply the base nutrition from the source.
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={s.card}>
+              <Text style={s.label}>Weight (g)</Text>
+              <TextInput
+                value={grams === "" ? "" : String(grams)}
+                onChangeText={(t) => {
+                  const n = Number(t);
+                  setGrams(Number.isFinite(n) ? n : "");
+                }}
+                keyboardType="numeric"
+                style={[s.input, { width: 120 }]}
+              />
+              {food && (
+                <Text style={s.help}>
+                  Base for scaling: {baseGramsFor(food)} g
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Nutrition preview */}
+          <View style={s.card}>
+            <Text style={s.label}>Nutrition</Text>
+            {loading && (
+              <View style={s.loadingRow}>
+                <ActivityIndicator />
+                <Text style={[s.help, { marginLeft: 8 }]}>
+                  Loading nutrition…
+                </Text>
+              </View>
+            )}
+
+            {!loading &&
+            food &&
+            totals.calories === 0 &&
+            totals.protein === 0 &&
+            totals.carbs === 0 &&
+            totals.fats === 0 ? (
+              <Text style={s.help}>
+                No nutrient data found for this item. Try another item or adjust
+                serving/grams.
+              </Text>
+            ) : (
+              <View style={s.macrosRow}>
+                <View style={s.macroItem}>
+                  <Text style={s.macroVal}>{totals.calories}</Text>
+                  <Text style={s.macroLbl}>kcal</Text>
+                </View>
+                <View style={s.macroItem}>
+                  <Text style={s.macroVal}>{totals.protein}</Text>
+                  <Text style={s.macroLbl}>Protein (g)</Text>
+                </View>
+                <View style={s.macroItem}>
+                  <Text style={s.macroVal}>{totals.carbs}</Text>
+                  <Text style={s.macroLbl}>Carbs (g)</Text>
+                </View>
+                <View style={s.macroItem}>
+                  <Text style={s.macroVal}>{totals.fats}</Text>
+                  <Text style={s.macroLbl}>Fats (g)</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Save */}
+          <Pressable
+            style={[s.saveBtn, (!title.trim() || loading) && s.saveBtnDisabled]}
+            onPress={onSave}
+            disabled={loading || !title.trim()}
+          >
+            {loading ? (
+              <ActivityIndicator color="#06240F" />
+            ) : (
+              <Text style={s.saveTxt}>Save Meal</Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", padding: 16 },
+  safe: { flex: 1, backgroundColor: "#0B0F14" },
+  scroll: { padding: 16, paddingBottom: 24 },
+
   h1: { color: "white", fontSize: 20, fontWeight: "800", marginBottom: 12 },
 
   card: {
@@ -354,9 +361,7 @@ const s = StyleSheet.create({
     backgroundColor: "#1C2A3A",
     borderColor: "#334155",
   },
-  toggleBtnDisabled: {
-    opacity: 0.4,
-  },
+  toggleBtnDisabled: { opacity: 0.4 },
   toggleTxt: { color: "#94A3B8", fontWeight: "700" },
   toggleTxtActive: { color: "white" },
   toggleTxtDisabled: { color: "#64748B" },
@@ -400,8 +405,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
-  saveBtnDisabled: {
-    opacity: 0.7,
-  },
+  saveBtnDisabled: { opacity: 0.7 },
   saveTxt: { color: "#06240F", fontWeight: "800" },
 });
