@@ -1,13 +1,21 @@
+// app/scan-barcode.tsx
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useComposerStore } from "../lib/composer";
 import { router } from "expo-router";
+import { fdcSearchByBarcode } from "../lib/fdc";
 
 export default function ScanBarcode() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = React.useState(false);
-  const add = useComposerStore((s) => s.add);
+  const [loading, setLoading] = React.useState(false);
+  const lockedRef = React.useRef(false); // prevent multiple navigations
 
   React.useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -32,46 +40,87 @@ export default function ScanBarcode() {
       </View>
     );
 
+  async function handleScan(data: string) {
+    if (lockedRef.current || loading) return;
+    lockedRef.current = true;
+    try {
+      setLoading(true);
+      const upc = String(data).trim();
+      const food = await fdcSearchByBarcode(upc);
+
+      if (food?.fdcId) {
+        // Go straight to Add Meal with the selected food
+        router.replace({
+          pathname: "/add-meal",
+          params: { fdcId: String(food.fdcId) },
+        });
+        return;
+      }
+
+      // Not found: let them scan again
+      Alert.alert(
+        "Not found",
+        "We couldn’t find this barcode. Try another scan."
+      );
+      lockedRef.current = false;
+      setLoading(false);
+    } catch (e: any) {
+      Alert.alert(
+        "Scan error",
+        e?.message ?? "Something went wrong while looking up this barcode."
+      );
+      lockedRef.current = false;
+      setLoading(false);
+    }
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: "#0B0F14" }}>
       <CameraView
         style={{ flex: 1 }}
-        onBarcodeScanned={({ data }) => {
-          if (scanned) return;
-          setScanned(true);
-          const item = {
-            id: String(data),
-            name: "Cereal Bar",
-            serving: "1 bar (40g)",
-            cals: 160,
-            p: 6,
-            c: 24,
-            f: 4,
-            barcode: String(data),
-          };
-          add(item);
-          router.back();
-        }}
+        // Only scan when not loading/locked
+        onBarcodeScanned={
+          loading || lockedRef.current
+            ? undefined
+            : ({ data }) => handleScan(String(data))
+        }
         barcodeScannerSettings={{
+          // Use the formats your users will actually encounter
           barcodeTypes: [
-            "qr",
             "ean13",
             "ean8",
             "upc_a",
             "upc_e",
             "code128",
+            "qr",
             "pdf417",
           ],
         }}
       />
-      {scanned && (
-        <Pressable style={sc.cta} onPress={() => setScanned(false)}>
-          <Text style={sc.ctaText}>Scan again</Text>
+
+      {/* Top bar with a safe Close */}
+      <View style={sc.topBar}>
+        <Pressable
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.replace("/home")
+          }
+          style={sc.topBtn}
+        >
+          <Text style={sc.topBtnText}>Close</Text>
         </Pressable>
+      </View>
+
+      {/* Loading overlay during UPC lookup */}
+      {loading && (
+        <View style={sc.loading}>
+          <ActivityIndicator />
+          <Text style={sc.loadingTxt}>Looking up item…</Text>
+        </View>
       )}
     </View>
   );
 }
+
 const sc = StyleSheet.create({
   container: {
     flex: 1,
@@ -81,6 +130,32 @@ const sc = StyleSheet.create({
     padding: 24,
   },
   text: { color: "white", textAlign: "center" },
+
+  topBar: {
+    position: "absolute",
+    top: 50,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  topBtn: {
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  topBtnText: { color: "white", fontWeight: "700" },
+
+  loading: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  loadingTxt: { color: "white", marginTop: 8 },
+
   cta: {
     position: "absolute",
     left: 24,
