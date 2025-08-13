@@ -125,7 +125,7 @@ const h = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingBottom: 16,
-    paddingTop: 12, // extra breathing room below the notch
+    // extra breathing room below the notch
   },
   brand: { color: "white", fontSize: 22, fontWeight: "800" },
   tagline: { color: "rgba(255,255,255,0.9)", marginTop: 2 },

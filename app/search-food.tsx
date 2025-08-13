@@ -1,4 +1,3 @@
-// app/search-food.tsx  (adjust path if you use /search or /search-food)
 import React, { useState } from "react";
 import {
   View,
@@ -8,6 +7,7 @@ import {
   Text,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFdcSearch } from "../hooks/UseFdcSearch";
 import { displayName, extractMacros, servingText, FdcFood } from "../lib/fdc";
 import { router } from "expo-router";
@@ -17,27 +17,29 @@ export default function SearchFood() {
   const { data, loading, error } = useFdcSearch(q);
 
   return (
-    <View style={s.container}>
-      <TextInput
-        style={s.input}
-        placeholder="Search foods (e.g., chicken breast)"
-        placeholderTextColor="#94A3B8"
-        value={q}
-        onChangeText={setQ}
-        autoFocus
-      />
+    <SafeAreaView style={s.safeArea}>
+      <View style={s.container}>
+        <TextInput
+          style={s.input}
+          placeholder="Search foods (e.g., chicken breast)"
+          placeholderTextColor="#94A3B8"
+          value={q}
+          onChangeText={setQ}
+          autoFocus
+        />
 
-      {loading ? <Text style={s.info}>Searching…</Text> : null}
-      {error ? <Text style={s.err}>{error}</Text> : null}
+        {loading ? <Text style={s.info}>Searching…</Text> : null}
+        {error ? <Text style={s.err}>{error}</Text> : null}
 
-      <FlatList
-        data={data}
-        keyExtractor={(item) => String(item.fdcId)}
-        renderItem={({ item }) => <Row item={item} />}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 24 }}
-      />
-    </View>
+        <FlatList
+          data={data}
+          keyExtractor={(item) => String(item.fdcId)}
+          renderItem={({ item }) => <Row item={item} />}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 24 }}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -66,7 +68,14 @@ function Row({ item }: { item: FdcFood }) {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0F14", padding: 16 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#0B0F14",
+  },
+  container: {
+    flex: 1,
+    padding: 16,
+  },
   input: {
     backgroundColor: "#0E141B",
     borderColor: "#1F2A37",
