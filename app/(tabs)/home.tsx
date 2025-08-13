@@ -67,27 +67,33 @@ export default function Home() {
         </View>
       </View>
 
-      {/* Macros with circular rings + horizontal labels */}
+      {/* Macros horizontally side-by-side */}
       <Text style={h.sectionLabel}>Macros</Text>
       <View style={h.card}>
-        <View style={h.macrosCol}>
-          <MacroRing
-            label="Protein"
-            value={totals.p || 0}
-            target={targets?.protein || 0}
-          />
-          <View style={h.divider} />
-          <MacroRing
-            label="Carbs"
-            value={totals.c || 0}
-            target={targets?.carbs || 0}
-          />
-          <View style={h.divider} />
-          <MacroRing
-            label="Fats"
-            value={totals.f || 0}
-            target={targets?.fats || 0}
-          />
+        <View style={h.macrosRow}>
+          <View style={h.macroItem}>
+            <MacroRing
+              label="Protein"
+              value={totals.p || 0}
+              target={targets?.protein || 0}
+            />
+          </View>
+          <View style={h.macroItem}>
+            <MacroRing
+              label="Carbs"
+              value={totals.c || 0}
+              target={targets?.carbs || 0}
+              // size={84}
+            />
+          </View>
+          <View style={h.macroItem}>
+            <MacroRing
+              label="Fats"
+              value={totals.f || 0}
+              target={targets?.fats || 0}
+              // size={84}
+            />
+          </View>
         </View>
       </View>
 
@@ -180,6 +186,19 @@ const h = StyleSheet.create({
   },
   macrosCol: { gap: 12 },
   divider: { height: 1, backgroundColor: "#1F2A37", opacity: 0.7 },
+
+  // HORIZONTAL MACROS
+  macrosRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    // gap is not supported on all RN versions; use spacing via width below
+    marginTop: 4,
+  },
+  macroItem: {
+    width: "32%", // three-up grid
+    alignItems: "center",
+  },
 
   // Add Food button
   addFood: {

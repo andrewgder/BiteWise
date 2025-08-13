@@ -6,23 +6,26 @@ type Props = {
   label: string;
   value: number;
   target: number;
-  size?: number; // outer size of the ring
+  size?: number; // outer diameter
   stroke?: number; // ring thickness
   showPercentInCenter?: boolean;
   gradientFrom?: string;
   gradientTo?: string;
+  layout?: "horizontal" | "vertical"; // NEW: vertical puts text under the ring
+  unit?: string; // e.g., "g" (defaults to "g" except for Calories)
 };
 
 export default function MacroRing({
   label,
   value,
   target,
-  size = 76,
+  size = 82,
   stroke = 10,
   showPercentInCenter = true,
-  // purple → pink like your reference image
   gradientFrom = "#8B5CF6",
   gradientTo = "#EC4899",
+  layout = "vertical",
+  unit,
 }: Props) {
   const pct =
     target > 0
@@ -34,79 +37,91 @@ export default function MacroRing({
   const circumference = 2 * Math.PI * radius;
   const dash = (pct / 100) * circumference;
 
-  return (
-    <View style={s.row}>
-      {/* Ring */}
-      <View style={{ width: size, height: size }}>
-        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <Defs>
-            <LinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={gradientFrom} />
-              <Stop offset="1" stopColor={gradientTo} />
-            </LinearGradient>
-          </Defs>
+  const u = unit ?? (label.toLowerCase() === "calories" ? "kcal" : "g");
 
-          {/* Track */}
-          <Circle
-            cx={half}
-            cy={half}
-            r={radius}
-            stroke="#E5EAF0"
-            strokeOpacity={0.35}
-            strokeWidth={stroke}
-            fill="none"
-          />
+  const Ring = (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Defs>
+          <LinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={gradientFrom} />
+            <Stop offset="1" stopColor={gradientTo} />
+          </LinearGradient>
+        </Defs>
 
-          {/* Progress */}
-          <Circle
-            cx={half}
-            cy={half}
-            r={radius}
-            stroke="url(#grad)"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            fill="none"
-            strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={circumference - dash}
-            transform={`rotate(-90 ${half} ${half})`}
-          />
-        </Svg>
+        {/* Track */}
+        <Circle
+          cx={half}
+          cy={half}
+          r={radius}
+          stroke="#E5EAF0"
+          strokeOpacity={0.35}
+          strokeWidth={stroke}
+          fill="none"
+        />
+        {/* Progress */}
+        <Circle
+          cx={half}
+          cy={half}
+          r={radius}
+          stroke="url(#grad)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference - dash}
+          transform={`rotate(-90 ${half} ${half})`}
+        />
+      </Svg>
 
-        {/* Center text */}
-        <View style={[s.center, { width: size, height: size }]}>
-          <Text style={s.percentText}>
-            {showPercentInCenter ? `${pct}%` : `${value}`}
-          </Text>
-        </View>
-      </View>
-
-      {/* Right-side labels (horizontal layout) */}
-      <View style={s.meta}>
-        <Text style={s.label}>{label}</Text>
-        <Text style={s.sub}>
-          {value} / {target} {label === "Calories" ? "kcal" : "g"}
+      {/* Center text */}
+      <View style={[s.center, { width: size, height: size }]}>
+        <Text style={s.percentText}>
+          {showPercentInCenter ? `${pct}%` : `${value}`}
         </Text>
       </View>
+    </View>
+  );
+
+  const Meta = (
+    <View style={[s.meta, layout === "vertical" && { alignItems: "center" }]}>
+      <Text style={s.label}>{label}</Text>
+      <Text style={s.sub}>
+        {value} / {target} {u}
+      </Text>
+    </View>
+  );
+
+  if (layout === "vertical") {
+    return (
+      <View style={s.vert}>
+        {Ring}
+        <View style={{ height: 6 }} />
+        {Meta}
+      </View>
+    );
+  }
+
+  // horizontal (old behavior) – ring left, text right
+  return (
+    <View style={s.horiz}>
+      {Ring}
+      <View style={{ width: 12 }} />
+      {Meta}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  horiz: { flexDirection: "row", alignItems: "center" },
+  vert: { alignItems: "center" },
   center: {
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
   },
-  percentText: {
-    color: "#334155",
-    fontWeight: "700",
-  },
-  meta: { flex: 1 },
+  percentText: { color: "#feffffff", fontWeight: "700" },
+  meta: {},
   label: { color: "white", fontWeight: "700" },
-  sub: { color: "#9AA8B4", marginTop: 2 },
+  sub: { color: "#9AA8B4", marginTop: 2, fontSize: 12 },
 });
